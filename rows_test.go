@@ -1141,3 +1141,53 @@ func trimSliceSpace(s []string) []string {
 	}
 	return s
 }
+
+func TestGetFilledRows(t *testing.T) {
+	wants := []struct {
+		value string
+		start string
+		end   string
+	}{{
+		value: "A1",
+		start: "A1",
+		end:   "B1",
+	}, {
+		value: "A2",
+		start: "A2",
+		end:   "A3",
+	}, {
+		value: "A4",
+		start: "A4",
+		end:   "B5",
+	}, {
+		value: "A7",
+		start: "A7",
+		end:   "C10",
+	}}
+
+	f, err := OpenFile(filepath.Join("test", "MergeCell.xlsx"))
+	if !assert.NoError(t, err) {
+		t.FailNow()
+	}
+	sheet1 := f.GetSheetName(0)
+	filledRows, err := f.GetFilledRows(sheet1)
+	assert.NoError(t, err)
+	mergeCells, err := f.GetMergeCells(sheet1)
+	if !assert.Len(t, mergeCells, len(wants)) {
+		t.FailNow()
+	}
+	assert.NoError(t, err)
+
+	for i, m := range mergeCells {
+		assert.Equal(t, wants[i].value, m.GetCellValue())
+		assert.Equal(t, wants[i].start, m.GetStartAxis())
+		assert.Equal(t, wants[i].end, m.GetEndAxis())
+	}
+	// Test get merged cells with invalid sheet name
+	_, err = f.GetMergeCells("Sheet:1")
+	assert.EqualError(t, err, ErrSheetNameInvalid.Error())
+	// Test get merged cells on not exists worksheet
+	_, err = f.GetMergeCells("SheetN")
+	assert.EqualError(t, err, "sheet SheetN does not exist")
+	assert.NoError(t, f.Close())
+}

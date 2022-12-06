@@ -15,12 +15,11 @@ import (
 	"bytes"
 	"encoding/xml"
 	"fmt"
+	"github.com/mohae/deepcopy"
 	"io"
 	"math"
 	"os"
 	"strconv"
-
-	"github.com/mohae/deepcopy"
 )
 
 // GetRows return all the rows in a sheet by given worksheet name, returned as
@@ -63,6 +62,38 @@ func (f *File) GetRows(sheet string, opts ...Options) ([][]string, error) {
 		}
 	}
 	return results[:max], rows.Close()
+}
+
+// GetFilledRows will fill the merged cells with the origin value
+func (f *File) GetFilledRows(sheet string, opts ...Options) ([][]string, error) {
+	rows, err := f.GetRows(sheet, opts...)
+	if err != nil {
+		return nil, err
+	}
+	mergedCells, err := f.GetMergeCells(sheet)
+	if err != nil {
+		return nil, err
+	}
+	for _, mc := range mergedCells {
+		coordinates, err := cellRefsToCoordinates(mc.GetStartAxis(), mc.GetEndAxis())
+		if err != nil {
+			return nil, err
+		}
+		for i := coordinates[0]; i <= coordinates[2]; i++ {
+			for j := coordinates[1]; j <= coordinates[3]; j++ {
+				// GetRows fetched the rows with value or formula cells, the continually blank
+				// cells in the tail of each row will be trimmed by trimSliceSpace function,
+				// so the length of each row may be inconsistent.
+				// if blank cells of row in the tail had been trimmed, we should complete it.
+				if len(rows[i-1]) < j {
+					rows[i-1] = append(rows[i-1], make([]string, j-len(rows[i-1]))...)
+				}
+				rows[i][j] = mc.GetCellValue()
+			}
+		}
+	}
+
+	return rows, nil
 }
 
 // Rows defines an iterator to a sheet.
